@@ -2,6 +2,7 @@ import { PrismaAdapter } from '@auth/prisma-adapter'
 import { PrismaClient } from '@prisma/client'
 import NextAuth from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
+import Stripe from 'stripe'
 
 const prisma = new PrismaClient()
 
@@ -13,5 +14,24 @@ export default NextAuth({
 			clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
 		}),
 	],
-	// TODO GITHUB PROVIDER
+	events: {
+		createUser: async ({ user }) => {
+			const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+				apiVersion: '2023-10-16',
+			})
+			if (user.name && user.email) {
+				const customer = await stripe.customers.create({
+					email: user.email,
+					name: user.name,
+				})
+
+				await prisma.user.update({
+					where: { id: user.id },
+					data: { stripeCustomerId: customer.id },
+				})
+			}
+		},
+	},
 })
+
+// TODO GITHUB PROVIDER
